@@ -71,7 +71,7 @@ class CPT {
 		 * Register the Post Type if it doesn't exist
 		 */
 		if ( ! post_type_exists( $this->post_type_name ) ) {
-			add_action( 'init', array( &$this, 'register_post_type' ) );
+			add_action( 'init', array( &$this, 'register_post_type' ), 2 );
 		}
 
 	}
@@ -84,7 +84,7 @@ class CPT {
 	public function register_post_type() {
 		//Capitalize and create plural term
 		$name      = ucwords( str_replace( '_', ' ', $this->post_type_name ) );
-		$plural    = self::smart_plural( $name );
+		$plural    = $this->smart_plural( $name );
 		$lc_plural = strtolower( $plural );
 
 		// Merge provided labels with defaults, preferring the provided labels
@@ -127,14 +127,13 @@ class CPT {
 				'exclude_from_search' => false,
 				'show_in_rest'        => true,
 				'publicly_queryable'  => true,
-				'supports'            => array( 'title', 'editor', 'author' ),
+				'supports'            => array( 'title', 'editor', 'author', 'revisions' ),
 				'show_in_nav_menus'   => true,
 				'capability_type'     => 'post',
 			),
 			// Provided args
 			$this->post_type_args
 		);
-
 		// Register the post type
 		register_post_type( $this->post_type_name, $args );
 	}
@@ -152,7 +151,6 @@ class CPT {
 	 */
 	public function add_taxonomy( string $name, $args = array(), $labels = array() ) {
 		if ( ! empty( $name ) ) {
-
 			$post_type_name = $this->post_type_name;
 
 			// Taxonomy parameters
@@ -160,62 +158,56 @@ class CPT {
 			$taxonomy_labels = $labels;
 			$taxonomy_args   = $args;
 
-			if ( ! taxonomy_exists( $taxonomy_name ) ) {
-				//Capitalize the words and create plural term
-				$name   = ucwords( str_replace( '_', ' ', $name ) );
-				$plural = self::smart_plural( $name );
+			//Capitalize the words and create plural term
+			$name   = ucwords( str_replace( '_', ' ', $name ) );
+			$plural = $this->smart_plural( $name );
+			// Merge provided labels with defaults, preferring the provided labels
+			$labels = array_merge(
+				array(
+					'name'              => _x( $plural, 'taxonomy general name' ),
+					'singular_name'     => _x( $name, 'taxonomy singular name' ),
+					'search_items'      => __( 'Search ' . $plural ),
+					'all_items'         => __( 'All ' . $plural ),
+					'parent_item'       => __( 'Parent ' . $name ),
+					'parent_item_colon' => __( 'Parent ' . $name . ':' ),
+					'edit_item'         => __( 'Edit ' . $name ),
+					'update_item'       => __( 'Update ' . $name ),
+					'add_new_item'      => __( 'Add New ' . $name ),
+					'new_item_name'     => __( 'New ' . $name . ' Name' ),
+					'menu_name'         => __( $plural ),
+				),
+				// Given labels
+				$taxonomy_labels
+			);
 
-				// Merge provided labels with defaults, preferring the provided labels
-				$labels = array_merge(
-					array(
-						'name'              => _x( $plural, 'taxonomy general name' ),
-						'singular_name'     => _x( $name, 'taxonomy singular name' ),
-						'search_items'      => __( 'Search ' . $plural ),
-						'all_items'         => __( 'All ' . $plural ),
-						'parent_item'       => __( 'Parent ' . $name ),
-						'parent_item_colon' => __( 'Parent ' . $name . ':' ),
-						'edit_item'         => __( 'Edit ' . $name ),
-						'update_item'       => __( 'Update ' . $name ),
-						'add_new_item'      => __( 'Add New ' . $name ),
-						'new_item_name'     => __( 'New ' . $name . ' Name' ),
-						'menu_name'         => __( $name ),
-					),
-					// Given labels
-					$taxonomy_labels
-				);
+			// Merge provided arguements with defaults, preferring the provided arguments
+			$args = array_merge(
+				array(
+					'label'             => $plural,
+					'labels'            => $labels,
+					'public'            => true,
+					'hierarchical'      => true,
+					'query_var'         => true,
+					'show_ui'           => true,
+					'show_in_menu'      => true,
+					'show_admin_column' => true,
+					'show_in_rest'      => true,
+				),
+				// Provided args
+				$taxonomy_args
+			);
 
-				// Merge provided arguements with defaults, preferring the provided arguments
-				$args = array_merge(
-					array(
-						'label'             => $plural,
-						'labels'            => $labels,
-						'public'            => true,
-						'hierarchical'      => true,
-						'query_var'         => true,
-						'show_ui'           => true,
-						'show_in_menu'      => true,
-						'show_admin_column' => true,
-						'show_in_rest'      => true,
-					),
-					// Provided args
-					$taxonomy_args
-				);
-
-				// Add the taxonomy to the post type
-				add_action(
-					'init',
-					function() use ( $taxonomy_name, $post_type_name, $args ) {
+			// Add the taxonomy to the post type
+			add_action(
+				'init',
+				function() use ( $taxonomy_name, $post_type_name, $args ) {
+					if ( ! taxonomy_exists( $taxonomy_name ) ) {
 						register_taxonomy( $taxonomy_name, $post_type_name, $args );
-					}
-				);
-			} else {
-				add_action(
-					'init',
-					function() use ( $taxonomy_name, $post_type_name ) {
+					} else {
 						register_taxonomy_for_object_type( $taxonomy_name, $post_type_name );
 					}
-				);
-			}
+				}
+			);
 		}
 	}
 
@@ -228,7 +220,7 @@ class CPT {
 	protected function smart_plural( string $name ) {
 		$trimmed_name = trim( $name );
 
-		$exceptions = self::exceptions();
+		$exceptions = $this->exceptions();
 
 		if ( array_key_exists( $trimmed_name, $exceptions ) ) {
 			return $exceptions[ $trimmed_name ];
